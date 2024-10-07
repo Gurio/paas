@@ -73,9 +73,20 @@ install_fastly_cli
 # Fastly tries to write into /app on platformsh and this throws an error
 export HOME=/tmp
 
-for vcl in ./config/fastly/*.vcl; do
-    trigger=$(basename $vcl .vcl)
-    name="shopware_${trigger}"
+# Iterate over both fastly and fastly-bg directories
+for vcl in ./config/fastly/*.vcl ./config/fastly-bg/*.vcl; do
+    # Skip if no files match the pattern
+    [[ -e "$vcl" ]] || continue
+
+    # Determine the prefix based on the directory
+    if [[ "$vcl" == ./config/fastly-bg/*.vcl ]]; then
+        prefix="shopware_bg_"
+    else
+        prefix="shopware_"
+    fi
+
+    trigger=$(basename "$vcl" .vcl)
+    name="${prefix}${trigger}"
 
     if fastly vcl snippet describe --version=active "--name=$name" > /dev/null; then
         # The snippet exists on remote
@@ -90,14 +101,14 @@ for vcl in ./config/fastly/*.vcl; do
 
             create_version_if_not_done
 
-            fastly vcl snippet update "--name=shopware_${trigger}" "--content=${vcl}" "--type=${trigger}" --version=latest
+            fastly vcl snippet update "--name=${name}" "--content=${vcl}" "--type=${trigger}" --version=latest
         else
             echo "Snippet ${trigger} is up to date"
         fi
     else
         create_version_if_not_done
 
-        fastly vcl snippet create "--name=shopware_${trigger}" "--content=${vcl}" "--type=${trigger}" --version=latest
+        fastly vcl snippet create "--name=${name}" "--content=${vcl}" "--type=${trigger}" --version=latest
     fi
 done
 
@@ -106,4 +117,3 @@ if [[ "$created_version" == "1" ]]; then
 
     fastly service-version activate --version latest
 fi
-
